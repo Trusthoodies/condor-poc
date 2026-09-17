@@ -8,11 +8,13 @@
 <script>
 document.getElementById("f").onload = function() {
   setTimeout(function() {
+    // base = directory where poc.html lives, e.g. https://trusthoodies.github.io/condor-poc
+    var base = location.href.substring(0, location.href.lastIndexOf("/"));
     document.getElementById("f").contentWindow.postMessage(
-      JSON.stringify({ action: "updateState", serverUrl: location.origin + "/.magnolia/x" }),
+      JSON.stringify({ action: "updateState", serverUrl: base + "/.magnolia/x" }),
       "*"
     );
-  }, 1500);
+  }, 2500);
 };
 </script>
 </body>
